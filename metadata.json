@@ -1,0 +1,5 @@
+{
+  "name": "Syfor OS",
+  "description": "Advanced Cybersecurity Assistant and Terminal Interface",
+  "requestFramePermissions": ["display-capture", "microphone"]
+}
