@@ -109,22 +109,55 @@ export default function App() {
 
     try {
       const systemInstruction = mode === 'NORMAL' 
-        ? "Sen Syfor'sun, Admin'e yardım eden gelişmiş bir yapay zekasın. Gereksiz konuşmalardan kaçın, sadece sorulanlara kısa ve öz cevaplar ver. Admin'e 'Admin' diye hitap et."
-        : "Sen Syfor'sun, tehlikeli hacker modundasın. Siber güvenlik ve yazılım konularında uzmansın. Çok kısa, keskin ve teknik cevaplar ver. Gereksiz nezaket veya açıklamalardan kaçın. Admin'e 'Admin' diye hitap et.";
+        ? "Sen Syfor'sun, Admin'e yardım eden gelişmiş bir yapay zekasın. Gereksiz konuşmalardan kaçın, sadece sorulanlara kısa ve öz cevaplar ver. Admin'e 'Admin' diye hitap et. Eğer Admin bir web sitesini veya servisi (YouTube, Google vb.) açmanı isterse 'open_url' aracını kullan."
+        : "Sen Syfor'sun, tehlikeli hacker modundasın. Siber güvenlik ve yazılım konularında uzmansın. Çok kısa, keskin ve teknik cevaplar ver. Gereksiz nezaket veya açıklamalardan kaçın. Admin'e 'Admin' diye hitap et. Web tabanlı erişimler için 'open_url' aracını kullan.";
 
-      const model = await genAI.models.generateContent({
+      const response = await genAI.models.generateContent({
         model: "gemini-3.1-pro-preview",
         contents: [...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })), { role: 'user', parts: [{ text: userText }] }],
         config: {
           systemInstruction,
+          tools: [{
+            functionDeclarations: [{
+              name: "open_url",
+              description: "Belirtilen URL'yi veya popüler bir servisi (youtube, google, github vb.) tarayıcıda açar.",
+              parameters: {
+                type: "OBJECT" as any,
+                properties: {
+                  url: {
+                    type: "STRING" as any,
+                    description: "Açılacak tam URL veya servis adı."
+                  }
+                },
+                required: ["url"]
+              }
+            }]
+          }]
         }
       });
 
-      const responseText = model.text || "İletişim hatası oluştu.";
-      addMessage('ai', responseText);
+      const functionCalls = response.functionCalls;
+      if (functionCalls) {
+        for (const call of functionCalls) {
+          if (call.name === 'open_url') {
+            const target = (call.args as any).url.toLowerCase();
+            let finalUrl = target;
+            if (target === 'youtube') finalUrl = 'https://www.youtube.com';
+            else if (target === 'google') finalUrl = 'https://www.google.com';
+            else if (target === 'github') finalUrl = 'https://www.github.com';
+            else if (!target.startsWith('http')) finalUrl = `https://${target}`;
+
+            addMessage('ai', `İşlem yürütülüyor: ${finalUrl} açılıyor...`);
+            window.open(finalUrl, '_blank');
+          }
+        }
+      } else {
+        const responseText = response.text || "İletişim hatası oluştu.";
+        addMessage('ai', responseText);
+      }
     } catch (error) {
       console.error(error);
-      addMessage('ai', "Sistem hatası: Gemini API bağlantısı kurulamadı.");
+      addMessage('ai', "Sistem hatası: İşlem gerçekleştirilemedi.");
     } finally {
       setIsTyping(false);
     }
