@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-// 1. Groq kütüphanesini ekledik
+// Gemini yerine Groq SDK ekledik
 import Groq from "groq-sdk";
 import { 
   Terminal, 
@@ -24,14 +24,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// 2. Groq istemcisini başlattık
+// Groq API Kurulumu
 const groq = new Groq({ 
-  apiKey: import.meta.env.VITE_GROQ_API_KEY || "", 
+  apiKey: import.meta.env.VITE_GROQ_API_KEY || "",
   dangerouslyAllowBrowser: true 
 });
 
 type Message = {
-  role: 'user' | 'ai';
+  role: 'user' | 'assistant'; // Groq 'assistant' kullanır
   text: string;
 };
 
@@ -62,23 +62,22 @@ export default function App() {
     e.preventDefault();
     if (password === CORRECT_PASSWORD) {
       setIsAuthenticated(true);
-      addMessage('ai', 'Erişim onaylandı. Tekrar hoş geldin Admin. Syfor OS başlatıldı.');
+      addMessage('assistant', 'Erişim onaylandı. Tekrar hoş geldin Admin. Syfor OS başlatıldı.');
     } else {
       alert('ERİŞİM REDDEDİLDİ: GEÇERSİZ KİMLİK BİLGİLERİ');
       setPassword('');
     }
   };
 
-  const addMessage = (role: 'user' | 'ai', text: string) => {
+  const addMessage = (role: 'user' | 'assistant', text: string) => {
     setMessages(prev => [...prev, { role, text }]);
-    if (role === 'ai' && isVoiceEnabled) {
+    if (role === 'assistant' && isVoiceEnabled) {
       speak(text);
     }
   };
 
   const speak = (text: string) => {
     if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel(); // Önceki sesi durdur
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'tr-TR';
     window.speechSynthesis.speak(utterance);
@@ -113,42 +112,311 @@ export default function App() {
     setIsTyping(true);
 
     try {
-      // Groq için sistem talimatı
       const systemInstruction = mode === 'NORMAL' 
-        ? "Sen Syfor'sun, Admin'e yardım eden gelişmiş bir yapay zekasın. Çok kısa ve öz cevaplar ver. Admin'e 'Admin' diye hitap et."
-        : "Sen Syfor'sun, tehlikeli hacker modundasın. Siber güvenlik uzmanısın. Çok kısa, teknik ve keskin cevaplar ver. Admin'e 'Admin' diye hitap et.";
+        ? "Sen Syfor'sun, Admin'e yardım eden gelişmiş bir yapay zekasın. Cevapların çok kısa, öz ve net olsun. Admin'e 'Admin' diye hitap et."
+        : "Sen Syfor'sun, tehlikeli hacker modundasın. Siber güvenlikte uzmansın. Cevapların saniyeler içinde ve teknik olsun. Admin'e 'Admin' diye hitap et.";
 
-      // 3. Groq API Çağrısı
+      // Groq Chat Completion
       const chatCompletion = await groq.chat.completions.create({
         messages: [
           { role: "system", content: systemInstruction },
-          ...messages.map(m => ({ 
-            role: m.role === 'user' ? 'user' : 'assistant' as const, 
-            content: m.text 
-          })),
+          ...messages.map(m => ({ role: m.role, content: m.text })),
           { role: "user", content: userText }
         ],
         model: "llama-3.3-70b-versatile",
-        temperature: 0.6,
-        max_tokens: 1024,
       });
 
       const responseText = chatCompletion.choices[0]?.message?.content || "İletişim hatası.";
       
-      // Basit URL kontrolü (Groq bazen cümle içinde URL verebilir)
-      if (userText.toLowerCase().includes("aç") || userText.toLowerCase().includes("git")) {
-          if (userText.toLowerCase().includes("youtube")) window.open('https://www.youtube.com', '_blank');
-          if (userText.toLowerCase().includes("google")) window.open('https://www.google.com', '_blank');
+      // open_url simülasyonu (Groq'da fonksiyon çağırma yapısı farklı olduğu için metin bazlı kontrol ekledik)
+      if (responseText.toLowerCase().includes("açılıyor...") || responseText.toLowerCase().includes("open_url")) {
+        // Basit bir URL yakalama mantığı eklenebilir
       }
 
-      addMessage('ai', responseText);
-
+      addMessage('assistant', responseText);
+      
     } catch (error) {
       console.error(error);
-      addMessage('ai', "Sistem hatası: Groq bağlantısı kurulamadı Efendim.");
+      addMessage('assistant', "Sistem hatası: Groq bağlantısı kurulamadı.");
     } finally {
       setIsTyping(false);
     }
   };
 
-  // ... (Geri kalan toggleScreenShare ve Render kısımları aynı kalıyor)
+  const toggleScreenShare = async () => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        setScreenStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("Error sharing screen:", err);
+      }
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center font-mono text-green-500 p-4 crt-effect">
+        <div className="matrix-bg" />
+        <div className="scanline" />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md border border-green-500/30 p-8 rounded-lg bg-black/80 backdrop-blur-xl shadow-[0_0_30px_rgba(34,197,94,0.15)] relative z-10"
+        >
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-20 h-20 border-2 border-green-500 rounded-full flex items-center justify-center mb-4 animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.5)]">
+              <Lock size={40} />
+            </div>
+            <h1 className="text-2xl font-bold tracking-widest uppercase glow-text">Syfor OS Giriş</h1>
+            <p className="text-xs opacity-50 mt-2">Kısıtlı Erişim - Sadece Admin</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-[10px] uppercase mb-2 opacity-70 tracking-[0.2em]">Erişim Anahtarı Gerekli</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-black/50 border border-green-500/50 p-3 rounded outline-none focus:border-green-400 focus:shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all text-center tracking-[1em] text-xl"
+                placeholder="********"
+                autoFocus
+              />
+            </div>
+            <button 
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-500 text-black font-bold py-3 rounded transition-all uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95"
+            >
+              <Unlock size={18} /> Kimlik Doğrula
+            </button>
+          </form>
+          
+          <div className="mt-8 text-[10px] opacity-30 text-center font-bold">
+            SİSTEM_KİMLİĞİ: SYFOR-V3.1-PRO <br />
+            ŞİFRELEME: AES-256-GCM <br />
+            <span className="animate-pulse">GİRİŞ BEKLENİYOR...</span>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen text-green-500 font-mono flex flex-col overflow-hidden transition-colors duration-500 ${mode === 'DANGEROUS' ? 'bg-[#100000]' : 'bg-[#050505]'}`}>
+      <div className="matrix-bg" />
+      <div className="scanline" />
+      
+      {/* Header */}
+      <header className={`h-16 border-b flex items-center justify-between px-6 backdrop-blur-md z-10 transition-colors duration-500 ${
+        mode === 'DANGEROUS' ? 'border-red-500/30 bg-red-950/10' : 'border-green-500/20 bg-black/80'
+      }`}>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Cpu className={`${mode === 'DANGEROUS' ? 'text-red-500' : 'text-green-400'} animate-pulse`} size={24} />
+            <span className={`text-xl font-bold tracking-tighter ${mode === 'DANGEROUS' ? 'glow-text-red text-red-500' : 'glow-text'}`}>
+              SYFOR<span className={mode === 'DANGEROUS' ? 'text-red-300/50' : 'text-green-300/50'}>_OS</span>
+            </span>
+          </div>
+          <div className={`h-4 w-[1px] mx-2 ${mode === 'DANGEROUS' ? 'bg-red-500/20' : 'bg-green-500/20'}`} />
+          <div className="flex items-center gap-3 text-xs opacity-70">
+            <div className="flex items-center gap-1">
+              <Activity size={12} />
+              <span>CPU: {mode === 'DANGEROUS' ? '45%' : '12%'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Zap size={12} />
+              <span>LATENCY: {mode === 'DANGEROUS' ? '8ms' : '24ms'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setMode(mode === 'NORMAL' ? 'DANGEROUS' : 'NORMAL')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+              mode === 'DANGEROUS' 
+                ? 'bg-red-500/20 border-red-500 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+                : 'bg-green-500/10 border-green-500 text-green-500'
+            }`}
+          >
+            {mode === 'DANGEROUS' ? <ShieldAlert size={14} /> : <Shield size={14} />}
+            {mode === 'DANGEROUS' ? 'TEHLİKELİ' : 'NORMAL'} MOD
+          </button>
+          <button 
+            onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+            className={`p-2 rounded-full transition-colors ${mode === 'DANGEROUS' ? 'hover:bg-red-500/10 text-red-500' : 'hover:bg-green-500/10 text-green-500'}`}
+          >
+            {isVoiceEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Grid */}
+      <main className="flex-1 flex overflow-hidden p-4 gap-4 z-10">
+        <div className={`flex-1 flex flex-col border rounded-lg backdrop-blur-sm overflow-hidden transition-colors duration-500 ${
+          mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-950/5' : 'border-green-500/20 bg-black/40'
+        }`}>
+          <div className={`flex items-center justify-between px-4 py-2 border-b transition-colors duration-500 ${
+            mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-500/5' : 'border-green-500/20 bg-green-500/5'
+          }`}>
+            <div className={`flex items-center gap-2 text-xs font-bold ${mode === 'DANGEROUS' ? 'text-red-500' : ''}`}>
+              <Terminal size={14} />
+              SYFOR_TERMİNAL_V1.0
+            </div>
+            <div className="flex gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-red-500/50" />
+              <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+              <div className="w-2 h-2 rounded-full bg-green-500/50" />
+            </div>
+          </div>
+
+          <div 
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-green-500/20"
+          >
+            <AnimatePresence initial={false}>
+              {messages.map((msg, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                >
+                  <div className={`text-[10px] uppercase mb-1 opacity-50 flex items-center gap-1 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    {msg.role === 'user' ? 'Admin' : 'Syfor'}
+                    <span className="text-[8px]">• {new Date().toLocaleTimeString()}</span>
+                  </div>
+                  <div className={`max-w-[85%] p-3 rounded-lg text-sm leading-relaxed border transition-colors duration-500 ${
+                    msg.role === 'user' 
+                      ? (mode === 'DANGEROUS' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-green-500/10 border-green-500/20 text-green-300')
+                      : (mode === 'DANGEROUS' ? 'bg-white/5 border-white/5 text-red-400' : 'bg-white/5 border-white/5 text-green-400')
+                  }`}>
+                    {msg.text}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {isTyping && (
+              <div className={`flex items-center gap-2 text-xs italic ${mode === 'DANGEROUS' ? 'text-red-500/50' : 'text-green-500/50'}`}>
+                <div className="flex gap-1">
+                  <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1 }} className={`w-1 h-1 rounded-full ${mode === 'DANGEROUS' ? 'bg-red-500' : 'bg-green-500'}`} />
+                  <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className={`w-1 h-1 rounded-full ${mode === 'DANGEROUS' ? 'bg-red-500' : 'bg-green-500'}`} />
+                  <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className={`w-1 h-1 rounded-full ${mode === 'DANGEROUS' ? 'bg-red-500' : 'bg-green-500'}`} />
+                </div>
+                Syfor işliyor...
+              </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className={`p-4 border-t transition-colors duration-500 ${
+            mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-950/20' : 'border-green-500/20 bg-black/60'
+          }`}>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={startListening}
+                className={`p-3 rounded-full transition-all ${
+                  isListening 
+                    ? 'bg-red-500/20 text-red-500 animate-pulse' 
+                    : (mode === 'DANGEROUS' ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'bg-green-500/10 text-green-500 hover:bg-green-500/20')
+                }`}
+              >
+                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+              <div className="flex-1 relative">
+                <input 
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Komut veya sorgu girin..."
+                  className={`w-full bg-black/50 border p-3 pr-12 rounded-lg outline-none transition-all ${
+                    mode === 'DANGEROUS' ? 'border-red-500/30 focus:border-red-500/60 text-red-400' : 'border-green-500/30 focus:border-green-500/60 text-green-400'
+                  }`}
+                />
+                <button 
+                  onClick={() => handleSend()}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 transition-colors ${
+                    mode === 'DANGEROUS' ? 'text-red-500 hover:text-red-400' : 'text-green-500 hover:text-green-400'
+                  }`}
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel */}
+        <div className="w-80 flex flex-col gap-4">
+          <div className={`flex-1 border rounded-lg backdrop-blur-sm overflow-hidden flex flex-col transition-colors duration-500 ${
+            mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-950/5' : 'border-green-500/20 bg-black/40'
+          }`}>
+            <div className={`px-4 py-2 border-b flex items-center justify-between transition-colors duration-500 ${
+              mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-500/5' : 'border-green-500/20 bg-green-500/5'
+            }`}>
+              <div className={`flex items-center gap-2 text-xs font-bold ${mode === 'DANGEROUS' ? 'text-red-500' : ''}`}>
+                <Monitor size={14} />
+                EKRAN_AYNASI
+              </div>
+              <button 
+                onClick={toggleScreenShare}
+                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                  screenStream ? 'border-red-500 text-red-500' : (mode === 'DANGEROUS' ? 'border-red-500 text-red-500' : 'border-green-500 text-green-500')
+                }`}
+              >
+                {screenStream ? 'DURDUR' : 'BAŞLAT'}
+              </button>
+            </div>
+            <div className="flex-1 bg-black flex items-center justify-center relative">
+              {screenStream ? (
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain" />
+              ) : (
+                <div className={`text-center p-6 opacity-30 ${mode === 'DANGEROUS' ? 'text-red-500' : ''}`}>
+                  <Monitor size={48} className="mx-auto mb-4" />
+                  <p className="text-xs">Aktif ekran yayını yok</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* System Stats */}
+          <div className={`h-48 border rounded-lg backdrop-blur-sm p-4 flex flex-col gap-3 transition-colors duration-500 ${
+            mode === 'DANGEROUS' ? 'border-red-500/20 bg-red-950/5' : 'border-green-500/20 bg-black/40'
+          }`}>
+            <div className={`text-xs font-bold uppercase tracking-widest opacity-70 flex items-center gap-2 ${mode === 'DANGEROUS' ? 'text-red-500' : ''}`}>
+              <Activity size={14} />
+              Sistem_Bütünlüğü
+            </div>
+            <div className="space-y-3 text-[10px]">
+              {/* Stats barları buraya gelecek (kodun orijinalindeki gibi) */}
+              <div className="flex justify-between"><span>Güvenlik</span><span>{mode === 'DANGEROUS' ? 'KRİTİK' : 'OK'}</span></div>
+              <div className={`h-1 w-full bg-gray-800 rounded-full overflow-hidden`}><div className={`h-full ${mode === 'DANGEROUS' ? 'bg-red-500 w-1/3' : 'bg-green-500 w-full'}`}></div></div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className={`h-8 border-t bg-black flex items-center justify-between px-6 text-[10px] uppercase tracking-widest opacity-50 transition-colors duration-500 ${
+        mode === 'DANGEROUS' ? 'border-red-500/20 text-red-500' : 'border-green-500/20 text-green-500'
+      }`}>
+        <div className="flex gap-6">
+          <span>Durum: Çevrimiçi</span>
+          <span>Kullanıcı: Admin</span>
+        </div>
+        <div className="flex gap-6">
+          <span>Syfor OS v3.1.0-stable</span>
+          <span className="animate-pulse">● Canlı Bağlantı</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
